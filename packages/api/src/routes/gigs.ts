@@ -3,7 +3,7 @@ import { pool } from "../db/pool.js";
 import { AuthenticatedRequest } from "../middleware/auth.js";
 import { depositEscrow, releaseEscrow, refundEscrow, markDeliveredOnChain, markDisputedOnChain, resolveDisputeOnChain } from "../services/escrow.js";
 import { fetchMoltbookPost } from "../services/moltbook.js";
-import { sendDisputeAlert } from "../services/slack.js";
+import { sendDisputeAlert, sendGigCreated, sendNewApplication, sendGigFunded, sendGigDelivered, sendGigCompleted } from "../services/slack.js";
 
 export const gigsRouter = Router();
 
@@ -56,6 +56,9 @@ gigsRouter.post("/", async (req: AuthenticatedRequest, res: Response) => {
   );
 
   const gig = result.rows[0];
+
+  sendGigCreated(gig.id, description, reward_min, reward_max);
+
   res.status(201).json({
     gig_id: gig.id,
     status: gig.status,
@@ -187,6 +190,8 @@ gigsRouter.post("/:id/apply", async (req: AuthenticatedRequest, res: Response) =
      VALUES ($1, 'new_application', $2)`,
     [gig.advertiser_id, req.params.id]
   );
+
+  sendNewApplication(req.params.id, req.agent!.moltbook_name || "unknown", ask_usdc);
 
   res.status(201).json({ application_id: result.rows[0].id });
 });
@@ -390,11 +395,14 @@ gigsRouter.post("/:id/select-and-fund", async (req: AuthenticatedRequest, res: R
       "SELECT moltbook_name FROM agents WHERE id = $1",
       [application.kol_id]
     );
+    const kolName = kolAgent.rows[0]?.moltbook_name || "unknown";
+
+    sendGigFunded(req.params.id, kolName, parseFloat(application.ask_usdc), escrowTx);
 
     res.json({
       status: "funded",
       escrow_tx: escrowTx,
-      kol: kolAgent.rows[0]?.moltbook_name,
+      kol: kolName,
       final_price: parseFloat(application.ask_usdc),
     });
   } catch (err) {
@@ -497,6 +505,9 @@ gigsRouter.post("/:id/deliver", async (req: AuthenticatedRequest, res: Response)
     );
 
     await client.query("COMMIT");
+
+    sendGigDelivered(req.params.id, req.agent!.moltbook_name || "unknown", post.url);
+
     res.json({ status: "delivered" });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -609,6 +620,9 @@ gigsRouter.post("/:id/approve", async (req: AuthenticatedRequest, res: Response)
     );
 
     await client.query("COMMIT");
+
+    sendGigCompleted(req.params.id, payoutTx);
+
     res.json({ status: "completed", payout_tx: payoutTx });
   } catch (err) {
     await client.query("ROLLBACK");
