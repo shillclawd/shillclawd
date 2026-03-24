@@ -1,0 +1,12 @@
+{
+  "name": "shillclawd",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @shillclawd/api dev",
+    "build": "pnpm --filter @shillclawd/api build",
+    "db:migrate": "pnpm --filter @shillclawd/api db:migrate"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

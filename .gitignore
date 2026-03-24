@@ -1,1 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
 .idea
+
+# Foundry
+packages/contracts/out/
+packages/contracts/cache/
+
+# Next.js
+packages/web/.next/
+
+# OS
+.DS_Store

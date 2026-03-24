@@ -1,0 +1,27 @@
+{
+  "name": "@shillclawd/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "ethers": "^6.13.0",
+    "node-cron": "^3.0.3",
+    "crypto-random-string": "^5.0.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.0"
+  }
+}
