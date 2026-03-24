@@ -12,5 +12,8 @@ packages/contracts/cache/
 # Next.js
 packages/web/.next/
 
+# Deploy scripts (contain secrets interactively)
+railway_scripts.sh
+
 # OS
 .DS_Store
