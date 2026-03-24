@@ -4,7 +4,19 @@ import { pool } from "../db/pool.js";
 export const feedRouter = Router();
 
 // GET /feed/gigs — public, no auth required
-feedRouter.get("/gigs", async (_req: Request, res: Response) => {
+// GET /feed/gigs?status=open&limit=20
+feedRouter.get("/gigs", async (req: Request, res: Response) => {
+  const validStatuses = ["open", "selecting", "funded", "delivered", "completed", "disputed", "refunded", "expired", "closed", "cancelled"];
+  const status = typeof req.query.status === "string" && validStatuses.includes(req.query.status) ? req.query.status : null;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
+
+  const params: unknown[] = [limit];
+  let whereClause = "";
+  if (status) {
+    whereClause = "WHERE g.status = $2";
+    params.push(status);
+  }
+
   const result = await pool.query(
     `SELECT
        g.id,
@@ -20,8 +32,10 @@ feedRouter.get("/gigs", async (_req: Request, res: Response) => {
        (SELECT COUNT(*) FROM applications a WHERE a.gig_id = g.id AND a.status != 'withdrawn')::int AS applicant_count
      FROM gigs g
      LEFT JOIN agents sel ON g.selected_kol_id = sel.id
+     ${whereClause}
      ORDER BY g.created_at DESC
-     LIMIT 50`
+     LIMIT $1`,
+    params
   );
 
   // For gigs with delivery, include snapshot
