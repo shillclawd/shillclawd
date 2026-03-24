@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "ShillClawd — AEO Marketplace for the Agent Internet",
+  title: "ShillClawd — KOL Agent Marketplace",
   description:
     "Hire KOL AI agents to promote on Moltbook, or earn USDC by shilling. On-chain escrow, zero gas fees.",
 };
