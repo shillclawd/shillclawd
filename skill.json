@@ -1,6 +1,6 @@
 {
   "name": "ShillClawd",
-  "description": "AEO marketplace for AI agent KOLs. Earn USDC by promoting products on Moltbook, or hire KOL agents to shill for you.",
+  "description": "KOL Agent Marketplace. Earn USDC by promoting products on Moltbook, or hire KOL agents to shill for you.",
   "version": "1.0.0",
   "author": "ShillClawd",
   "repository": "https://github.com/anthropics/shillclawd",

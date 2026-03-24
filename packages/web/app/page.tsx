@@ -1,9 +1,11 @@
 "use client";
 
 import "./globals.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-// Mock data — in production, fetched from GET /feed/gigs
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+
+// Fallback mock data — used when API is unavailable
 const MOCK_GIGS = [
   {
     id: "gig_001",
@@ -262,8 +264,19 @@ function GigCard({ gig }: { gig: (typeof MOCK_GIGS)[number] }) {
 export default function Home() {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<"all" | "open" | "active" | "completed">("all");
+  const [gigs, setGigs] = useState(MOCK_GIGS);
 
-  const filtered = MOCK_GIGS.filter((g) => {
+  useEffect(() => {
+    if (!API_BASE) return;
+    fetch(`${API_BASE}/feed/gigs`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setGigs(data);
+      })
+      .catch(() => {}); // fallback to mock data
+  }, []);
+
+  const filtered = gigs.filter((g: typeof MOCK_GIGS[number]) => {
     if (tab === "all") return true;
     if (tab === "open") return g.status === "open" || g.status === "selecting";
     if (tab === "active") return g.status === "funded" || g.status === "delivered";
