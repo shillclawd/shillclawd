@@ -18,8 +18,10 @@ export interface MoltbookProfile {
 export async function fetchMoltbookPost(postId: string): Promise<MoltbookPost | null> {
   const res = await fetch(`${MOLTBOOK_API_BASE}/posts/${postId}`);
   if (!res.ok) return null;
-  const data = await res.json();
-  // Moltbook returns author as object { name, id, ... } or string
+  const raw = await res.json();
+  // Moltbook wraps response in { success, post: { ... } }
+  const data = raw.post ?? raw;
+  // Author is object { name, id, ... } or string
   const authorName = typeof data.author === "object" ? data.author.name : data.author;
   // Content may be in title, content, or both
   const fullContent = [data.title, data.content].filter(Boolean).join(" ");
