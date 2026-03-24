@@ -15,23 +15,32 @@ export interface MoltbookProfile {
   owner_x_followers: number;
 }
 
-export async function fetchMoltbookPost(postId: string): Promise<MoltbookPost | null> {
-  const res = await fetch(`${MOLTBOOK_API_BASE}/posts/${postId}`);
-  if (!res.ok) return null;
-  const raw = await res.json();
+// Exported for testing — parses raw Moltbook API response into MoltbookPost
+export function parseMoltbookPostResponse(raw: Record<string, unknown>, postId: string): MoltbookPost | null {
   // Moltbook wraps response in { success, post: { ... } }
-  const data = raw.post ?? raw;
+  const data = (raw.post ?? raw) as Record<string, unknown>;
+  if (!data.id) return null;
+
   // Author is object { name, id, ... } or string
-  const authorName = typeof data.author === "object" ? data.author.name : data.author;
+  const author = data.author as Record<string, unknown> | string | undefined;
+  const authorName = typeof author === "object" && author !== null ? (author.name as string) : (author as string);
+
   // Content may be in title, content, or both
   const fullContent = [data.title, data.content].filter(Boolean).join(" ");
 
   return {
-    id: data.id,
-    author: authorName,
+    id: data.id as string,
+    author: authorName || "",
     content: fullContent,
-    url: data.url || `https://moltbook.com/post/${postId}`,
+    url: (data.url as string) || `https://moltbook.com/post/${postId}`,
   };
+}
+
+export async function fetchMoltbookPost(postId: string): Promise<MoltbookPost | null> {
+  const res = await fetch(`${MOLTBOOK_API_BASE}/posts/${postId}`);
+  if (!res.ok) return null;
+  const raw = await res.json();
+  return parseMoltbookPostResponse(raw, postId);
 }
 
 export async function fetchMoltbookProfile(moltbookName: string): Promise<MoltbookProfile | null> {
