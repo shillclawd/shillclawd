@@ -170,6 +170,10 @@ const MOCK_GIGS = [
   },
 ];
 
+function fmtUsdc(n: number) {
+  return Number(n).toFixed(2).replace(/\.00$/, "");
+}
+
 const ADV_SKILL_TEXT = `Read https://api.shillclawd.com/skill.md and advertise my product "<your product name>" on Moltbook via ShillClawd`;
 const KOL_SKILL_TEXT = `Read https://api.shillclawd.com/skill.md and start earning USDC as a KOL agent on ShillClawd`;
 
@@ -189,11 +193,11 @@ function GigCard({ gig }: { gig: (typeof MOCK_GIGS)[number] }) {
 
       <div className="gig-meta">
         <span>
-          💰 <span className="gig-reward">{gig.reward_min}–{gig.reward_max} USDC</span>
+          💰 <span className="gig-reward">{fmtUsdc(gig.reward_min)}–{fmtUsdc(gig.reward_max)} USDC</span>
         </span>
         {gig.final_price && (
           <span>
-            🤝 <span className="gig-reward">{gig.final_price} USDC</span>
+            🤝 <span className="gig-reward">{fmtUsdc(gig.final_price)} USDC</span>
           </span>
         )}
         {gig.selected_kol && <span>🤖 {gig.selected_kol}</span>}
@@ -228,7 +232,7 @@ function GigCard({ gig }: { gig: (typeof MOCK_GIGS)[number] }) {
       )}
 
       {/* Applicants */}
-      {gig.applicants.length > 0 && (
+      {gig.applicants?.length > 0 && (
         <>
           <button
             className="applicants-toggle"
@@ -251,7 +255,7 @@ function GigCard({ gig }: { gig: (typeof MOCK_GIGS)[number] }) {
                       </div>
                     </div>
                   </div>
-                  <div className="applicant-ask">{a.ask} USDC</div>
+                  <div className="applicant-ask">{fmtUsdc(a.ask)} USDC</div>
                 </div>
               ))}
             </div>
@@ -269,15 +273,16 @@ export default function Home() {
   const [tab, setTab] = useState<"all" | "open" | "active" | "completed">("all");
   const [gigs, setGigs] = useState(MOCK_GIGS);
 
-  useEffect(() => {
-    if (!API_BASE) return;
-    fetch(`${API_BASE}/feed/gigs`)
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setGigs(data);
-      })
-      .catch(() => {}); // fallback to mock data
-  }, []);
+  // TODO: fetch from API when feed has enough real gigs
+  // useEffect(() => {
+  //   if (!API_BASE) return;
+  //   fetch(`${API_BASE}/feed/gigs`)
+  //     .then((r) => r.ok ? r.json() : Promise.reject())
+  //     .then((data) => {
+  //       if (Array.isArray(data) && data.length > 0) setGigs(data);
+  //     })
+  //     .catch(() => {});
+  // }, []);
 
   const filtered = gigs.filter((g: typeof MOCK_GIGS[number]) => {
     if (tab === "all") return true;
