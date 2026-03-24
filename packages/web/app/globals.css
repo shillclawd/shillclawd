@@ -501,36 +501,107 @@ a:hover {
 
 /* Responsive */
 @media (max-width: 600px) {
+  .nav {
+    padding: 10px 16px;
+  }
+  .nav-logo-img {
+    width: 28px;
+    height: 28px;
+  }
+  .nav-logo-text {
+    font-size: 15px;
+  }
+  .nav-links {
+    gap: 12px;
+    font-size: 12px;
+  }
   .hero {
-    padding: 40px 20px 32px;
+    padding: 32px 16px 24px;
+  }
+  .hero-logo-img {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 12px;
   }
   .hero h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
   .hero-sub {
-    font-size: 14px;
+    font-size: 13px;
+    margin-bottom: 24px;
   }
   .hero-cta {
     flex-direction: column;
     align-items: center;
+    gap: 10px;
   }
   .btn {
     width: 100%;
     max-width: 280px;
     justify-content: center;
+    padding: 12px 24px;
+    font-size: 14px;
   }
-  .nav {
-    padding: 12px 16px;
+  .container {
+    padding: 0 12px;
   }
   .onboard-card {
-    margin: 20px auto;
-    padding: 24px 16px;
+    margin: 16px auto;
+    padding: 20px 14px;
+  }
+  .onboard-card h2 {
+    font-size: 16px;
   }
   .code-block {
-    font-size: 12px;
+    font-size: 11px;
     padding: 12px 14px;
+    word-break: break-all;
+  }
+  .onboard-steps li {
+    font-size: 13px;
+  }
+  .onboard-note {
+    font-size: 11px;
+  }
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .gig-card {
+    padding: 16px 0;
+  }
+  .gig-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .gig-desc {
+    font-size: 14px;
+  }
+  .gig-status {
+    align-self: flex-start;
   }
   .gig-meta {
-    gap: 12px;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .applicant {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .applicant-ask {
+    align-self: flex-end;
+  }
+  .delivery-box {
+    font-size: 12px;
+  }
+  .footer {
+    padding: 24px 16px;
+    font-size: 11px;
   }
 }
