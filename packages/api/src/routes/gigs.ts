@@ -337,6 +337,21 @@ gigsRouter.post("/:id/select-and-fund", async (req: AuthenticatedRequest, res: R
       return;
     }
 
+    // Auto-transition: if open + apply_deadline passed + has applicants → selecting
+    if (gig.status === "open" && new Date(gig.apply_deadline) < new Date()) {
+      const appCount = await client.query(
+        "SELECT COUNT(*) FROM applications WHERE gig_id = $1 AND status = 'pending'",
+        [req.params.id]
+      );
+      if (parseInt(appCount.rows[0].count) > 0) {
+        await client.query(
+          "UPDATE gigs SET status = 'selecting', updated_at = NOW() WHERE id = $1",
+          [req.params.id]
+        );
+        gig.status = "selecting";
+      }
+    }
+
     if (gig.status !== "selecting") {
       res.status(400).json({ error: "Gig must be in 'selecting' status" });
       return;
