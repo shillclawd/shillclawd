@@ -23,15 +23,45 @@ vi.mock("../src/services/moltbook.js", () => ({
 
 vi.mock("../src/services/slack.js", () => ({
   sendDisputeAlert: vi.fn().mockResolvedValue(undefined),
+  sendGigCreated: vi.fn().mockResolvedValue(undefined),
+  sendNewApplication: vi.fn().mockResolvedValue(undefined),
+  sendGigFunded: vi.fn().mockResolvedValue(undefined),
+  sendGigDelivered: vi.fn().mockResolvedValue(undefined),
+  sendGigCompleted: vi.fn().mockResolvedValue(undefined),
 }));
 
 import request from "supertest";
 import app from "../src/app.js";
 import { pool } from "../src/db/pool.js";
 import { setupDatabase, cleanDatabase, teardownDatabase } from "./setup.js";
-import { fetchMoltbookPost } from "../src/services/moltbook.js";
+import { fetchMoltbookPost, fetchMoltbookProfile } from "../src/services/moltbook.js";
+import { depositEscrow, markDeliveredOnChain, releaseEscrow, refundEscrow, markDisputedOnChain, resolveDisputeOnChain } from "../src/services/escrow.js";
+import { sendDisputeAlert, sendGigCreated, sendNewApplication, sendGigFunded, sendGigDelivered, sendGigCompleted } from "../src/services/slack.js";
 
 const moltbookPost = vi.mocked(fetchMoltbookPost);
+
+function resetMockDefaults() {
+  moltbookPost.mockResolvedValue(null);
+  vi.mocked(fetchMoltbookProfile).mockResolvedValue({
+    karma: 5200,
+    followers: 340,
+    posts_count: 87,
+    top_submolts: ["m/defi", "m/technology"],
+    owner_x_followers: 12000,
+  });
+  vi.mocked(depositEscrow).mockResolvedValue("0xmock_escrow_tx");
+  vi.mocked(markDeliveredOnChain).mockResolvedValue("0xmock_deliver_tx");
+  vi.mocked(releaseEscrow).mockResolvedValue("0xmock_release_tx");
+  vi.mocked(refundEscrow).mockResolvedValue("0xmock_refund_tx");
+  vi.mocked(markDisputedOnChain).mockResolvedValue("0xmock_dispute_tx");
+  vi.mocked(resolveDisputeOnChain).mockResolvedValue("0xmock_resolve_tx");
+  vi.mocked(sendDisputeAlert).mockResolvedValue(undefined);
+  vi.mocked(sendGigCreated).mockResolvedValue(undefined);
+  vi.mocked(sendNewApplication).mockResolvedValue(undefined);
+  vi.mocked(sendGigFunded).mockResolvedValue(undefined);
+  vi.mocked(sendGigDelivered).mockResolvedValue(undefined);
+  vi.mocked(sendGigCompleted).mockResolvedValue(undefined);
+}
 
 beforeAll(async () => {
   await setupDatabase();
@@ -44,25 +74,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanDatabase();
   vi.resetAllMocks();
-  // Re-set defaults after reset (resetAllMocks clears implementations)
-  moltbookPost.mockResolvedValue(null);
-  const { fetchMoltbookProfile } = await import("../src/services/moltbook.js");
-  vi.mocked(fetchMoltbookProfile).mockResolvedValue({
-    karma: 5200,
-    followers: 340,
-    posts_count: 87,
-    top_submolts: ["m/defi", "m/technology"],
-    owner_x_followers: 12000,
-  });
-  const { depositEscrow, markDeliveredOnChain, releaseEscrow, refundEscrow, markDisputedOnChain, resolveDisputeOnChain } = await import("../src/services/escrow.js");
-  vi.mocked(depositEscrow).mockResolvedValue("0xmock_escrow_tx");
-  vi.mocked(markDeliveredOnChain).mockResolvedValue("0xmock_deliver_tx");
-  vi.mocked(releaseEscrow).mockResolvedValue("0xmock_release_tx");
-  vi.mocked(refundEscrow).mockResolvedValue("0xmock_refund_tx");
-  vi.mocked(markDisputedOnChain).mockResolvedValue("0xmock_dispute_tx");
-  vi.mocked(resolveDisputeOnChain).mockResolvedValue("0xmock_resolve_tx");
-  const { sendDisputeAlert } = await import("../src/services/slack.js");
-  vi.mocked(sendDisputeAlert).mockResolvedValue(undefined);
+  resetMockDefaults();
 });
 
 // --- Helpers ---

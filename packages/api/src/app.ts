@@ -14,13 +14,15 @@ import { authMiddleware } from "./middleware/auth.js";
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
-app.use(rateLimit({
-  windowMs: 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-}));
+if (process.env.NODE_ENV !== "test") {
+  app.use(rateLimit({
+    windowMs: 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  }));
+}
 
 // Static files
 app.get("/skill.md", (_req, res) => {
