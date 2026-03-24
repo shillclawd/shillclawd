@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "pnpm --filter @shillclawd/api dev",
     "build": "pnpm --filter @shillclawd/api build",
+    "start": "pnpm --filter @shillclawd/api start",
     "db:migrate": "pnpm --filter @shillclawd/api db:migrate"
   },
   "engines": {
