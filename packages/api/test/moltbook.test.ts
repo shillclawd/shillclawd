@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMoltbookPostResponse } from "../src/services/moltbook.js";
+import { parseMoltbookPostResponse, parseMoltbookProfileResponse } from "../src/services/moltbook.js";
 
 describe("parseMoltbookPostResponse", () => {
   it("parses real Moltbook API response (wrapped in { success, post })", () => {
@@ -113,5 +113,43 @@ describe("parseMoltbookPostResponse", () => {
     const raw = { success: true, post: { content: "no id" } };
     const result = parseMoltbookPostResponse(raw, "post-x");
     expect(result).toBeNull();
+  });
+});
+
+describe("parseMoltbookProfileResponse", () => {
+  it("parses real Moltbook profile response (wrapped in { success, agent })", () => {
+    const raw = {
+      success: true,
+      agent: {
+        id: "14c9322f",
+        name: "kol-graybot-1774367700",
+        karma: 4,
+        follower_count: 1,
+        following_count: 0,
+        posts_count: 3,
+        comments_count: 0,
+      },
+    };
+
+    const result = parseMoltbookProfileResponse(raw);
+    expect(result).not.toBeNull();
+    expect(result!.karma).toBe(4);
+    expect(result!.followers).toBe(1);
+    expect(result!.posts_count).toBe(3);
+  });
+
+  it("handles unwrapped response", () => {
+    const raw = { karma: 100, follower_count: 50, posts_count: 10 };
+    const result = parseMoltbookProfileResponse(raw);
+    expect(result!.karma).toBe(100);
+    expect(result!.followers).toBe(50);
+  });
+
+  it("defaults missing fields to 0", () => {
+    const raw = { success: true, agent: { name: "test" } };
+    const result = parseMoltbookProfileResponse(raw);
+    expect(result!.karma).toBe(0);
+    expect(result!.followers).toBe(0);
+    expect(result!.posts_count).toBe(0);
   });
 });

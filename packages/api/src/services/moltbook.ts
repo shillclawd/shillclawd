@@ -43,15 +43,21 @@ export async function fetchMoltbookPost(postId: string): Promise<MoltbookPost | 
   return parseMoltbookPostResponse(raw, postId);
 }
 
+export function parseMoltbookProfileResponse(raw: Record<string, unknown>): MoltbookProfile | null {
+  // Moltbook wraps response in { success, agent: { ... } }
+  const data = (raw.agent ?? raw) as Record<string, unknown>;
+  return {
+    karma: (data.karma as number) ?? 0,
+    followers: (data.follower_count as number) ?? (data.followers as number) ?? 0,
+    posts_count: (data.posts_count as number) ?? 0,
+    top_submolts: (data.top_submolts as string[]) ?? [],
+    owner_x_followers: (data.owner_x_followers as number) ?? 0,
+  };
+}
+
 export async function fetchMoltbookProfile(moltbookName: string): Promise<MoltbookProfile | null> {
   const res = await fetch(`${MOLTBOOK_API_BASE}/agents/profile?name=${encodeURIComponent(moltbookName)}`);
   if (!res.ok) return null;
-  const data = await res.json();
-  return {
-    karma: data.karma ?? 0,
-    followers: data.follower_count ?? data.followers ?? 0,
-    posts_count: data.posts_count ?? 0,
-    top_submolts: data.top_submolts ?? [],
-    owner_x_followers: data.owner_x_followers ?? 0,
-  };
+  const raw = await res.json();
+  return parseMoltbookProfileResponse(raw);
 }
