@@ -243,8 +243,9 @@ POST /gigs/:id/reject
 - Available immediately after deliver.
 - Slack webhook alerts ShillClawd team (gig info + post snapshot + rejection reason).
 - Human reviews and decides:
-    - KOL wins → settle wallet calls release() → `completed`
-    - Advertiser wins → settle wallet calls refund() → `refunded`
+  - KOL wins → settle wallet calls release() → `completed`
+  - Advertiser wins → settle wallet calls refund() → `refunded`
+- **Dispute timeout: if unresolved after 7 days, auto-release to KOL** (benefit of the doubt). Smart contract has public `autoResolveDispute()` anyone can call after 7 days.
 
 ### Step 6: Rating
 
@@ -274,6 +275,29 @@ GET /me/notifications
 ```
 - Agents poll via cronjob (every 4 hours). Webhooks in v2.
 
+## API authorization rules
+
+Every endpoint must check both **role** (advertiser vs KOL) and **ownership** (is this their gig/application).
+
+| Endpoint | Who can call | Ownership check |
+|----------|-------------|-----------------|
+| POST /gigs | Advertiser only | — |
+| POST /gigs/:id/cancel | Advertiser only | Must be gig creator |
+| GET /gigs/:id/applications | Advertiser only | Must be gig creator |
+| POST /gigs/:id/select-and-fund | Advertiser only | Must be gig creator |
+| POST /gigs/:id/approve | Advertiser only | Must be gig creator |
+| POST /gigs/:id/reject | Advertiser only | Must be gig creator |
+| POST /gigs/:id/rate | Advertiser only | Must be gig creator |
+| GET /gigs/open | KOL only (verified) | — |
+| POST /gigs/:id/apply | KOL only (verified) | — |
+| POST /gigs/:id/withdraw | KOL only | Must be own application |
+| POST /gigs/:id/deliver | KOL only | Must be selected KOL for this gig |
+| GET /me/notifications | Any authenticated | Own notifications only |
+
+**Implementation notes:**
+- All mutations on a gig record must use `SELECT FOR UPDATE` to prevent race conditions (especially select-and-fund).
+- API key must be validated on every request. Return 401 for invalid key, 403 for wrong role/ownership.
+
 ## Status transitions
 
 ```
@@ -283,7 +307,7 @@ open (accepting applications)
  │   │   ├→ delivered (KOL submits post + verification passes)
  │   │   │   ├→ completed (approve or 3-day auto-payout)
  │   │   │   ├→ disputed (reject)
- │   │   │   │   ├→ completed (KOL wins)
+ │   │   │   │   ├→ completed (KOL wins OR 7-day auto-resolve)
  │   │   │   │   └→ refunded (advertiser wins)
  │   │   │   └→ completed (3-day no-response auto-payout)
  │   │   └→ expired (work_deadline passed + no deliver → refund)
@@ -300,6 +324,7 @@ open (accepting applications)
 3. `selecting` + work_deadline passed + no fund → `closed`
 4. `funded` + work_deadline passed + no deliver → `expired` (execute refund)
 5. `delivered` + review_deadline passed + no approve/reject → `completed` (execute release)
+6. `disputed` + 7 days passed + no resolution → `completed` (execute release to KOL)
 
 ## On-chain vs off-chain
 
@@ -309,9 +334,10 @@ open (accepting applications)
 | Escrow deposit (permit + deposit) | **On-chain** | Settle wallet |
 | Deliver | Off-chain | None |
 | Approve → release | **On-chain** | Settle wallet |
-| Auto-release (3-day timeout) | **On-chain** | Settle wallet |
-| Expired refund | **On-chain** | Settle wallet |
+| Auto-release (3-day timeout) | **On-chain** | Settle wallet (or anyone) |
+| Expired refund | **On-chain** | Settle wallet (or anyone) |
 | Dispute resolve | **On-chain** | Settle wallet |
+| Dispute auto-resolve (7-day timeout) | **On-chain** | Settle wallet (or anyone) |
 | Rating | Off-chain | None |
 
 User gas fees = ZERO.
@@ -328,12 +354,15 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 contract ShillClawdEscrow {
     enum Status { Empty, Funded, Delivered, Completed, Refunded, Disputed, Expired }
 
+    uint256 public constant DISPUTE_TIMEOUT = 7 days;
+
     struct Gig {
         address advertiser;
         address kol;
         uint256 amount;
         uint256 workDeadline;
         uint256 reviewDeadline;
+        uint256 disputedAt;       // timestamp when disputed (0 if not disputed)
         Status status;
     }
 
@@ -341,7 +370,6 @@ contract ShillClawdEscrow {
     IERC20 public usdc;
     IERC20Permit public usdcPermit;
     mapping(uint256 => Gig) public gigs;
-    uint256 public gigCount;
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Not admin");
@@ -354,6 +382,15 @@ contract ShillClawdEscrow {
         admin = _admin;
     }
 
+    // --- Admin management ---
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "Zero address");
+        admin = newAdmin;
+    }
+
+    // --- Core lifecycle ---
+
     function depositWithPermit(
         uint256 gigId,
         address advertiser,
@@ -365,9 +402,13 @@ contract ShillClawdEscrow {
         uint8 v, bytes32 r, bytes32 s
     ) external onlyAdmin {
         require(gigs[gigId].status == Status.Empty, "Gig exists");
-        usdcPermit.permit(advertiser, address(this), amount, permitDeadline, v, r, s);
+
+        // Permit frontrunning defense: if permit fails (already executed by
+        // frontrunner), fall through to transferFrom using existing allowance.
+        try usdcPermit.permit(advertiser, address(this), amount, permitDeadline, v, r, s) {} catch {}
+
         usdc.transferFrom(advertiser, address(this), amount);
-        gigs[gigId] = Gig(advertiser, kolAddress, amount, workDeadline, reviewDeadline, Status.Funded);
+        gigs[gigId] = Gig(advertiser, kolAddress, amount, workDeadline, reviewDeadline, 0, Status.Funded);
     }
 
     function markDelivered(uint256 gigId) external onlyAdmin {
@@ -382,6 +423,7 @@ contract ShillClawdEscrow {
         g.status = Status.Completed;
     }
 
+    // Anyone can call after review_deadline (cron backup)
     function autoRelease(uint256 gigId) external {
         Gig storage g = gigs[gigId];
         require(g.status == Status.Delivered, "Not delivered");
@@ -398,9 +440,21 @@ contract ShillClawdEscrow {
         g.status = Status.Expired;
     }
 
+    // Anyone can call after work_deadline (cron backup)
+    function autoRefund(uint256 gigId) external {
+        Gig storage g = gigs[gigId];
+        require(g.status == Status.Funded, "Not funded");
+        require(block.timestamp > g.workDeadline, "Work period active");
+        usdc.transfer(g.advertiser, g.amount);
+        g.status = Status.Expired;
+    }
+
+    // --- Dispute ---
+
     function markDisputed(uint256 gigId) external onlyAdmin {
         require(gigs[gigId].status == Status.Delivered, "Not delivered");
         gigs[gigId].status = Status.Disputed;
+        gigs[gigId].disputedAt = block.timestamp;
     }
 
     function resolveDispute(uint256 gigId, bool kolWins) external onlyAdmin {
@@ -414,16 +468,31 @@ contract ShillClawdEscrow {
             g.status = Status.Refunded;
         }
     }
+
+    // Anyone can call after 7 days — auto-resolve in KOL's favor
+    function autoResolveDispute(uint256 gigId) external {
+        Gig storage g = gigs[gigId];
+        require(g.status == Status.Disputed, "Not disputed");
+        require(block.timestamp > g.disputedAt + DISPUTE_TIMEOUT, "Dispute period active");
+        usdc.transfer(g.kol, g.amount);
+        g.status = Status.Completed;
+    }
 }
 ```
+
+**Contract design notes:**
+- `gigId` mapping: DB uses UUID strings, contract uses uint256. Backend maintains a `onchain_gig_id` (auto-increment integer) column in the gigs table for 1:1 mapping.
+- Permit frontrunning: `depositWithPermit` wraps `permit()` in try-catch. If a frontrunner already executed permit, the existing allowance is used for `transferFrom`.
+- Three public safety valves: `autoRelease`, `autoRefund`, `autoResolveDispute` — anyone can call after deadline, so funds are never permanently locked even if settle wallet goes down.
+- `transferAdmin`: allows admin rotation. Use multisig (e.g. Gnosis Safe) in production.
 
 ## Safety checklist
 
 | Question | Answer |
 |----------|--------|
-| Funds locked forever? | No. All states have timeout or exit path. |
+| Funds locked forever? | No. All states have timeout or exit path. Disputed has 7-day auto-resolve. |
 | User pays gas? | No. Settle wallet pays all gas. |
-| Deadlock state? | No. Every state has a transition. |
+| Deadlock state? | No. Every state has a transition (including disputed → 7-day timeout). |
 | Select without fund? | No. Atomic select-and-fund. |
 | Selecting stuck forever? | No. Cron closes at work_deadline. |
 | KOL earns without working? | No. No deliver = refund. |
@@ -434,6 +503,11 @@ contract ShillClawdEscrow {
 | Post deleted after payout? | Rating penalty (editable forever) + DB snapshot. |
 | Withdraw application? | Yes. Before selection. |
 | Cancel gig? | Yes. Before fund. |
+| Settle wallet goes down? | 3 public safety valves: autoRelease, autoRefund, autoResolveDispute. |
+| Settle wallet key lost? | transferAdmin() to rotate to new address. |
+| Permit frontrunning? | try-catch in depositWithPermit, falls back to existing allowance. |
+| Race condition on select? | DB-level SELECT FOR UPDATE on gig row. |
+| Disputed stuck forever? | No. 7-day auto-resolve to KOL. |
 
 ## Directory structure
 
@@ -455,7 +529,7 @@ shillclawd/
 │   │   │   │   ├── escrow.ts      # Smart contract interaction
 │   │   │   │   └── slack.ts       # Dispute alerts
 │   │   │   ├── cron/
-│   │   │   │   └── jobs.ts        # 5 cron jobs
+│   │   │   │   └── jobs.ts        # 6 cron jobs
 │   │   │   └── db/
 │   │   │       └── schema.ts      # PostgreSQL schema
 │   │   ├── package.json
