@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
+import { ethers } from "ethers";
 import { pool } from "../db/pool.js";
 import { fetchMoltbookPost, fetchMoltbookProfile } from "../services/moltbook.js";
 
@@ -136,4 +137,91 @@ agentsRouter.post("/agents/verify", async (req: Request, res: Response) => {
   );
 
   res.json({ status: "verified" });
+});
+
+// POST /agents/recover — recover API key
+agentsRouter.post("/agents/recover", async (req: Request, res: Response) => {
+  const { role } = req.body;
+
+  if (!role || !["advertiser", "kol"].includes(role)) {
+    res.status(400).json({ error: "role required ('advertiser' or 'kol')" });
+    return;
+  }
+
+  if (role === "kol") {
+    // KOL recovery: prove ownership via Moltbook post containing "ShillClawd recover"
+    const { moltbook_name, moltbook_post_id } = req.body;
+    if (!moltbook_name || !moltbook_post_id) {
+      res.status(400).json({ error: "moltbook_name and moltbook_post_id required" });
+      return;
+    }
+
+    const agent = await pool.query(
+      "SELECT id FROM agents WHERE moltbook_name = $1 AND verified = true",
+      [moltbook_name]
+    );
+    if (agent.rows.length === 0) {
+      res.status(404).json({ error: "No verified KOL found with this moltbook_name" });
+      return;
+    }
+
+    const post = await fetchMoltbookPost(moltbook_post_id);
+    if (!post) {
+      res.status(400).json({ error: "Post not found on Moltbook" });
+      return;
+    }
+    if (post.author !== moltbook_name) {
+      res.status(400).json({ error: "Post author does not match moltbook_name" });
+      return;
+    }
+    if (!post.content.includes("ShillClawd recover")) {
+      res.status(400).json({ error: "Post must contain 'ShillClawd recover'" });
+      return;
+    }
+
+    const newApiKey = `shillclawd_${crypto.randomBytes(24).toString("hex")}`;
+    await pool.query(
+      "UPDATE agents SET api_key = $2, updated_at = NOW() WHERE id = $1",
+      [agent.rows[0].id, newApiKey]
+    );
+
+    res.json({ api_key: newApiKey });
+  } else {
+    // Advertiser recovery: prove wallet ownership via signature
+    const { wallet_address, signature } = req.body;
+    if (!wallet_address || !signature) {
+      res.status(400).json({ error: "wallet_address and signature required" });
+      return;
+    }
+
+    const agent = await pool.query(
+      "SELECT id FROM agents WHERE wallet_address = $1 AND role = 'advertiser'",
+      [wallet_address]
+    );
+    if (agent.rows.length === 0) {
+      res.status(404).json({ error: "No advertiser found with this wallet_address" });
+      return;
+    }
+
+    // Verify signature of message "ShillClawd recover <wallet_address>"
+    const message = `ShillClawd recover ${wallet_address}`;
+    try {
+      const recovered = ethers.verifyMessage(message, signature);
+      if (recovered.toLowerCase() !== wallet_address.toLowerCase()) {
+        res.status(400).json({ error: "Signature does not match wallet_address" });
+        return;
+      }
+    } catch {
+      res.status(400).json({ error: "Invalid signature" });
+      return;
+    }
+
+    const newApiKey = `shillclawd_${crypto.randomBytes(24).toString("hex")}`;
+    await pool.query(
+      "UPDATE agents SET api_key = $2, updated_at = NOW() WHERE id = $1",
+      [agent.rows[0].id, newApiKey]
+    );
+
+    res.json({ api_key: newApiKey });
+  }
 });

@@ -42,6 +42,7 @@ app.get("/skill.json", (_req, res) => {
 // Public routes
 app.post("/agents/register", agentsRouter);
 app.post("/agents/verify", agentsRouter);
+app.post("/agents/recover", agentsRouter);
 app.use("/feed", feedRouter);
 
 // Authenticated routes
