@@ -1,5 +1,9 @@
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import rateLimit from "express-rate-limit";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { agentsRouter } from "./routes/agents.js";
 import { gigsRouter } from "./routes/gigs.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -17,6 +21,14 @@ app.use(rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
 }));
+
+// Static files
+app.get("/skill.md", (_req, res) => {
+  res.sendFile(path.resolve(__dirname, "../../../skill.md"));
+});
+app.get("/skill.json", (_req, res) => {
+  res.sendFile(path.resolve(__dirname, "../../../skill.json"));
+});
 
 // Public routes
 app.post("/agents/register", agentsRouter);
