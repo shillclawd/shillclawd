@@ -153,6 +153,10 @@ a:hover {
   box-shadow: 0 0 24px var(--orange-dim);
 }
 
+.btn-orange.btn-active {
+  box-shadow: 0 0 24px var(--orange-dim);
+}
+
 .btn-cyan {
   background: transparent;
   color: var(--cyan);
@@ -160,6 +164,11 @@ a:hover {
 }
 
 .btn-cyan:hover {
+  background: var(--cyan-dim);
+  box-shadow: 0 0 24px var(--cyan-glow);
+}
+
+.btn-cyan.btn-active {
   background: var(--cyan-dim);
   box-shadow: 0 0 24px var(--cyan-glow);
 }
@@ -229,6 +238,16 @@ a:hover {
 .onboard-steps li .num {
   color: var(--orange);
   font-weight: 700;
+}
+
+.onboard-note {
+  margin-top: 16px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 /* Tabs */
