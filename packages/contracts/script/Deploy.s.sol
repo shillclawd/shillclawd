@@ -9,10 +9,12 @@ contract DeployEscrow is Script {
     address constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     function run() external {
-        address admin = vm.envAddress("SETTLE_WALLET_ADDRESS");
+        // Derive admin address from the broadcaster (--private-key)
+        uint256 deployerKey = vm.envUint("SETTLE_WALLET_PRIVATE_KEY");
+        address admin = vm.addr(deployerKey);
         address usdc = vm.envOr("USDC_ADDRESS", USDC_BASE);
 
-        vm.startBroadcast();
+        vm.startBroadcast(deployerKey);
         ShillClawdEscrow escrow = new ShillClawdEscrow(usdc, admin);
         vm.stopBroadcast();
 

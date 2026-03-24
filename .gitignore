@@ -8,11 +8,14 @@ dist/
 # Foundry
 packages/contracts/out/
 packages/contracts/cache/
+packages/contracts/broadcast/
 
 # Next.js
 packages/web/.next/
+packages/web/next-env.d.ts
 
-# Deploy scripts (contain secrets interactively)
+# Railway
+railway.json
 railway_scripts.sh
 
 # OS
