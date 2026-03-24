@@ -13,6 +13,13 @@ import { authMiddleware } from "./middleware/auth.js";
 
 const app = express();
 app.set("trust proxy", 1);
+app.use((_req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (_req.method === "OPTIONS") { res.sendStatus(204); return; }
+  next();
+});
 app.use(express.json());
 if (process.env.NODE_ENV !== "test") {
   app.use(rateLimit({
