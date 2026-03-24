@@ -58,13 +58,25 @@ a:hover {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
+  gap: 10px;
 }
 
-.nav-logo .claw {
-  color: var(--orange);
+.nav-logo-img {
+  width: 36px;
+  height: 36px;
+}
+
+.nav-logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: #02B814;
+}
+
+/* Hero logo */
+.hero-logo-img {
+  width: 180px;
+  height: 180px;
+  margin-bottom: 20px;
 }
 
 .nav-links {
@@ -90,10 +102,6 @@ a:hover {
   margin: 0 auto;
 }
 
-.hero-emoji {
-  font-size: 64px;
-  margin-bottom: 20px;
-}
 
 .hero h1 {
   font-size: 38px;
