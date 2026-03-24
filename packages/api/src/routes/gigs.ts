@@ -107,7 +107,10 @@ gigsRouter.post("/:id/cancel", async (req: AuthenticatedRequest, res: Response) 
     res.json({ status: "cancelled" });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error("[gig-error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   } finally {
     client.release();
   }
@@ -432,7 +435,10 @@ gigsRouter.post("/:id/select-and-fund", async (req: AuthenticatedRequest, res: R
     });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error("[select-and-fund]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Escrow transaction failed. Check wallet balance and permit signature." });
+    }
   } finally {
     client.release();
   }
@@ -536,7 +542,10 @@ gigsRouter.post("/:id/deliver", async (req: AuthenticatedRequest, res: Response)
     res.json({ status: "delivered" });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error("[gig-error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   } finally {
     client.release();
   }
@@ -651,7 +660,10 @@ gigsRouter.post("/:id/approve", async (req: AuthenticatedRequest, res: Response)
     res.json({ status: "completed", payout_tx: payoutTx });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error("[gig-error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   } finally {
     client.release();
   }
@@ -729,7 +741,10 @@ gigsRouter.post("/:id/reject", async (req: AuthenticatedRequest, res: Response) 
     res.json({ status: "disputed" });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error("[gig-error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   } finally {
     client.release();
   }
