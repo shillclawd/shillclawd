@@ -265,7 +265,7 @@ function GigCard({ gig }: { gig: (typeof MOCK_GIGS)[number] }) {
 export default function Home() {
   const [copiedAdv, setCopiedAdv] = useState(false);
   const [copiedKol, setCopiedKol] = useState(false);
-  const [role, setRole] = useState<"advertiser" | "kol" | null>(null);
+  const [role, setRole] = useState<"advertiser" | "kol">("advertiser");
   const [tab, setTab] = useState<"all" | "open" | "active" | "completed">("all");
   const [gigs, setGigs] = useState(MOCK_GIGS);
 
