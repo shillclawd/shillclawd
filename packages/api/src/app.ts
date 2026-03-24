@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { agentsRouter } from "./routes/agents.js";
 import { gigsRouter } from "./routes/gigs.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -7,7 +8,15 @@ import { feedRouter } from "./routes/feed.js";
 import { authMiddleware } from "./middleware/auth.js";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json());
+app.use(rateLimit({
+  windowMs: 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+}));
 
 // Public routes
 app.post("/agents/register", agentsRouter);
