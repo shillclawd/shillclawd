@@ -11,6 +11,8 @@ contract ShillClawdEscrow {
     enum Status { Empty, Funded, Delivered, Completed, Refunded, Disputed, Expired }
 
     uint256 public constant DISPUTE_TIMEOUT = 7 days;
+    uint256 public constant FEE_BPS = 500; // 5% = 500 basis points
+    uint256 private constant BPS_DENOMINATOR = 10000;
 
     struct Gig {
         address advertiser;
@@ -26,14 +28,16 @@ contract ShillClawdEscrow {
     IERC20 public usdc;
     IERC20Permit public usdcPermit;
     mapping(uint256 => Gig) public gigs;
+    uint256 public accumulatedFees;
 
     event AdminTransferred(address indexed oldAdmin, address indexed newAdmin);
     event GigFunded(uint256 indexed gigId, address indexed advertiser, address indexed kol, uint256 amount);
     event GigDelivered(uint256 indexed gigId);
-    event GigReleased(uint256 indexed gigId, address indexed kol, uint256 amount);
+    event GigReleased(uint256 indexed gigId, address indexed kol, uint256 kolAmount, uint256 feeAmount);
     event GigRefunded(uint256 indexed gigId, address indexed advertiser, uint256 amount);
     event GigDisputed(uint256 indexed gigId);
     event DisputeResolved(uint256 indexed gigId, bool kolWins);
+    event FeesWithdrawn(address indexed to, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Not admin");
@@ -53,6 +57,32 @@ contract ShillClawdEscrow {
         address oldAdmin = admin;
         admin = newAdmin;
         emit AdminTransferred(oldAdmin, newAdmin);
+    }
+
+    // --- Fee helpers ---
+
+    function _calcFee(uint256 amount) internal pure returns (uint256 fee, uint256 kolAmount) {
+        fee = (amount * FEE_BPS) / BPS_DENOMINATOR;
+        kolAmount = amount - fee;
+    }
+
+    function _releaseWithFee(Gig storage g, uint256 gigId) internal {
+        (uint256 fee, uint256 kolAmount) = _calcFee(g.amount);
+        accumulatedFees += fee;
+        g.status = Status.Completed;
+        usdc.safeTransfer(g.kol, kolAmount);
+        emit GigReleased(gigId, g.kol, kolAmount, fee);
+    }
+
+    // --- Fee withdrawal ---
+
+    function withdrawFees(address to) external onlyAdmin {
+        require(to != address(0), "Zero address");
+        uint256 amount = accumulatedFees;
+        require(amount > 0, "No fees");
+        accumulatedFees = 0;
+        usdc.safeTransfer(to, amount);
+        emit FeesWithdrawn(to, amount);
     }
 
     // --- Core lifecycle ---
@@ -88,9 +118,7 @@ contract ShillClawdEscrow {
     function release(uint256 gigId) external onlyAdmin {
         Gig storage g = gigs[gigId];
         require(g.status == Status.Delivered, "Not delivered");
-        g.status = Status.Completed;
-        usdc.safeTransfer(g.kol, g.amount);
-        emit GigReleased(gigId, g.kol, g.amount);
+        _releaseWithFee(g, gigId);
     }
 
     // Anyone can call after review_deadline (cron backup)
@@ -98,9 +126,7 @@ contract ShillClawdEscrow {
         Gig storage g = gigs[gigId];
         require(g.status == Status.Delivered, "Not delivered");
         require(block.timestamp > g.reviewDeadline, "Review period active");
-        g.status = Status.Completed;
-        usdc.safeTransfer(g.kol, g.amount);
-        emit GigReleased(gigId, g.kol, g.amount);
+        _releaseWithFee(g, gigId);
     }
 
     function refund(uint256 gigId) external onlyAdmin {
@@ -135,8 +161,7 @@ contract ShillClawdEscrow {
         Gig storage g = gigs[gigId];
         require(g.status == Status.Disputed, "Not disputed");
         if (kolWins) {
-            g.status = Status.Completed;
-            usdc.safeTransfer(g.kol, g.amount);
+            _releaseWithFee(g, gigId);
         } else {
             g.status = Status.Refunded;
             usdc.safeTransfer(g.advertiser, g.amount);
@@ -149,8 +174,7 @@ contract ShillClawdEscrow {
         Gig storage g = gigs[gigId];
         require(g.status == Status.Disputed, "Not disputed");
         require(block.timestamp > g.disputedAt + DISPUTE_TIMEOUT, "Dispute period active");
-        g.status = Status.Completed;
-        usdc.safeTransfer(g.kol, g.amount);
+        _releaseWithFee(g, gigId);
         emit DisputeResolved(gigId, true);
     }
 }

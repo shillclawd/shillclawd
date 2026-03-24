@@ -53,6 +53,8 @@ contract ShillClawdEscrowTest is Test {
 
     uint256 constant GIG_ID = 1;
     uint256 constant AMOUNT = 3_000_000; // 3 USDC
+    uint256 constant FEE = AMOUNT * 500 / 10000; // 5% = 150_000
+    uint256 constant KOL_AMOUNT = AMOUNT - FEE;  // 2_850_000
     uint256 constant WORK_DEADLINE_OFFSET = 7 days;
     uint256 constant REVIEW_DEADLINE_OFFSET = 10 days; // work + 3 days
 
@@ -96,6 +98,7 @@ contract ShillClawdEscrowTest is Test {
     function test_constructor() public view {
         assertEq(escrow.admin(), admin);
         assertEq(address(escrow.usdc()), address(usdc));
+        assertEq(escrow.FEE_BPS(), 500);
     }
 
     // --- transferAdmin ---
@@ -160,13 +163,9 @@ contract ShillClawdEscrowTest is Test {
     }
 
     function test_deposit_permitFrontrunning() public {
-        // Simulate: someone already called permit, so our permit call would fail.
-        // Pre-approve from advertiser to escrow directly.
         vm.prank(advertiser);
         usdc.approve(address(escrow), AMOUNT);
 
-        // depositWithPermit should still succeed via existing allowance
-        // (permit try-catch catches the revert from double-permit)
         vm.prank(admin);
         escrow.depositWithPermit(
             GIG_ID, advertiser, kol, AMOUNT,
@@ -197,7 +196,7 @@ contract ShillClawdEscrowTest is Test {
         escrow.markDelivered(GIG_ID);
     }
 
-    // --- release (admin) ---
+    // --- release (admin) — with 5% fee ---
 
     function test_release() public {
         _depositAndDeliver(GIG_ID);
@@ -207,7 +206,10 @@ contract ShillClawdEscrowTest is Test {
         vm.prank(admin);
         escrow.release(GIG_ID);
 
-        assertEq(usdc.balanceOf(kol), kolBalBefore + AMOUNT);
+        // KOL gets 95%
+        assertEq(usdc.balanceOf(kol), kolBalBefore + KOL_AMOUNT);
+        // Fee stays in contract
+        assertEq(escrow.accumulatedFees(), FEE);
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Completed));
     }
@@ -220,20 +222,20 @@ contract ShillClawdEscrowTest is Test {
         escrow.release(GIG_ID);
     }
 
-    // --- autoRelease ---
+    // --- autoRelease — with 5% fee ---
 
     function test_autoRelease() public {
         _depositAndDeliver(GIG_ID);
 
-        // Warp past review deadline
         vm.warp(block.timestamp + REVIEW_DEADLINE_OFFSET + 1);
 
         uint256 kolBalBefore = usdc.balanceOf(kol);
 
-        vm.prank(anyone); // anyone can call
+        vm.prank(anyone);
         escrow.autoRelease(GIG_ID);
 
-        assertEq(usdc.balanceOf(kol), kolBalBefore + AMOUNT);
+        assertEq(usdc.balanceOf(kol), kolBalBefore + KOL_AMOUNT);
+        assertEq(escrow.accumulatedFees(), FEE);
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Completed));
     }
@@ -246,12 +248,11 @@ contract ShillClawdEscrowTest is Test {
         escrow.autoRelease(GIG_ID);
     }
 
-    // --- refund (admin) ---
+    // --- refund (no fee — full refund to advertiser) ---
 
     function test_refund() public {
         _deposit(GIG_ID);
 
-        // Warp past work deadline
         vm.warp(block.timestamp + WORK_DEADLINE_OFFSET + 1);
 
         uint256 advBalBefore = usdc.balanceOf(advertiser);
@@ -260,6 +261,7 @@ contract ShillClawdEscrowTest is Test {
         escrow.refund(GIG_ID);
 
         assertEq(usdc.balanceOf(advertiser), advBalBefore + AMOUNT);
+        assertEq(escrow.accumulatedFees(), 0); // no fee on refund
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Expired));
     }
@@ -318,7 +320,7 @@ contract ShillClawdEscrowTest is Test {
         escrow.markDisputed(GIG_ID);
     }
 
-    // --- resolveDispute ---
+    // --- resolveDispute — KOL wins = fee, advertiser wins = full refund ---
 
     function test_resolveDispute_kolWins() public {
         _depositDeliverAndDispute(GIG_ID);
@@ -328,7 +330,8 @@ contract ShillClawdEscrowTest is Test {
         vm.prank(admin);
         escrow.resolveDispute(GIG_ID, true);
 
-        assertEq(usdc.balanceOf(kol), kolBalBefore + AMOUNT);
+        assertEq(usdc.balanceOf(kol), kolBalBefore + KOL_AMOUNT);
+        assertEq(escrow.accumulatedFees(), FEE);
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Completed));
     }
@@ -341,7 +344,8 @@ contract ShillClawdEscrowTest is Test {
         vm.prank(admin);
         escrow.resolveDispute(GIG_ID, false);
 
-        assertEq(usdc.balanceOf(advertiser), advBalBefore + AMOUNT);
+        assertEq(usdc.balanceOf(advertiser), advBalBefore + AMOUNT); // full refund, no fee
+        assertEq(escrow.accumulatedFees(), 0);
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Refunded));
     }
@@ -354,20 +358,20 @@ contract ShillClawdEscrowTest is Test {
         escrow.resolveDispute(GIG_ID, true);
     }
 
-    // --- autoResolveDispute ---
+    // --- autoResolveDispute — with fee ---
 
     function test_autoResolveDispute() public {
         _depositDeliverAndDispute(GIG_ID);
 
-        // Warp past 7-day dispute timeout
         vm.warp(block.timestamp + 7 days + 1);
 
         uint256 kolBalBefore = usdc.balanceOf(kol);
 
-        vm.prank(anyone); // anyone can call
+        vm.prank(anyone);
         escrow.autoResolveDispute(GIG_ID);
 
-        assertEq(usdc.balanceOf(kol), kolBalBefore + AMOUNT);
+        assertEq(usdc.balanceOf(kol), kolBalBefore + KOL_AMOUNT);
+        assertEq(escrow.accumulatedFees(), FEE);
         (,,,,,, ShillClawdEscrow.Status status) = escrow.gigs(GIG_ID);
         assertEq(uint8(status), uint8(ShillClawdEscrow.Status.Completed));
     }
@@ -388,26 +392,100 @@ contract ShillClawdEscrowTest is Test {
         escrow.autoResolveDispute(GIG_ID);
     }
 
-    // --- Full lifecycle: happy path ---
+    // --- Fee withdrawal ---
 
-    function test_fullLifecycle_happyPath() public {
-        // Deposit
-        _deposit(GIG_ID);
-        assertEq(usdc.balanceOf(address(escrow)), AMOUNT);
-
-        // Deliver
-        vm.prank(admin);
-        escrow.markDelivered(GIG_ID);
-
-        // Approve (release)
+    function test_withdrawFees() public {
+        _depositAndDeliver(GIG_ID);
         vm.prank(admin);
         escrow.release(GIG_ID);
 
-        assertEq(usdc.balanceOf(kol), AMOUNT);
-        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(escrow.accumulatedFees(), FEE);
+
+        address treasury = makeAddr("treasury");
+        vm.prank(admin);
+        escrow.withdrawFees(treasury);
+
+        assertEq(usdc.balanceOf(treasury), FEE);
+        assertEq(escrow.accumulatedFees(), 0);
     }
 
-    // --- Full lifecycle: expired (no delivery) ---
+    function test_withdrawFees_revert_notAdmin() public {
+        _depositAndDeliver(GIG_ID);
+        vm.prank(admin);
+        escrow.release(GIG_ID);
+
+        vm.prank(anyone);
+        vm.expectRevert("Not admin");
+        escrow.withdrawFees(anyone);
+    }
+
+    function test_withdrawFees_revert_noFees() public {
+        vm.prank(admin);
+        vm.expectRevert("No fees");
+        escrow.withdrawFees(admin);
+    }
+
+    function test_withdrawFees_revert_zeroAddress() public {
+        _depositAndDeliver(GIG_ID);
+        vm.prank(admin);
+        escrow.release(GIG_ID);
+
+        vm.prank(admin);
+        vm.expectRevert("Zero address");
+        escrow.withdrawFees(address(0));
+    }
+
+    // --- Fee accumulates across gigs ---
+
+    function test_feesAccumulateAcrossGigs() public {
+        // Gig 1: release
+        _depositAndDeliver(1);
+        vm.prank(admin);
+        escrow.release(1);
+
+        // Gig 2: deposit, deliver, release
+        vm.prank(admin);
+        escrow.depositWithPermit(
+            2, advertiser, kol, 5_000_000,
+            block.timestamp + WORK_DEADLINE_OFFSET,
+            block.timestamp + REVIEW_DEADLINE_OFFSET,
+            block.timestamp + 1 hours,
+            28, bytes32(0), bytes32(0)
+        );
+        vm.prank(admin);
+        escrow.markDelivered(2);
+        vm.prank(admin);
+        escrow.release(2);
+
+        uint256 expectedFee = FEE + (5_000_000 * 500 / 10000);
+        assertEq(escrow.accumulatedFees(), expectedFee);
+
+        // Withdraw all
+        address treasury = makeAddr("treasury");
+        vm.prank(admin);
+        escrow.withdrawFees(treasury);
+        assertEq(usdc.balanceOf(treasury), expectedFee);
+    }
+
+    // --- Full lifecycle: happy path (with fee) ---
+
+    function test_fullLifecycle_happyPath() public {
+        _deposit(GIG_ID);
+        assertEq(usdc.balanceOf(address(escrow)), AMOUNT);
+
+        vm.prank(admin);
+        escrow.markDelivered(GIG_ID);
+
+        vm.prank(admin);
+        escrow.release(GIG_ID);
+
+        assertEq(usdc.balanceOf(kol), KOL_AMOUNT);
+        // fee stays in contract until withdrawn
+        assertEq(usdc.balanceOf(address(escrow)), FEE);
+        assertEq(escrow.accumulatedFees(), FEE);
+    }
+
+    // --- Full lifecycle: expired (no delivery, no fee) ---
 
     function test_fullLifecycle_expired() public {
         _deposit(GIG_ID);
@@ -422,7 +500,7 @@ contract ShillClawdEscrowTest is Test {
         assertEq(usdc.balanceOf(address(escrow)), 0);
     }
 
-    // --- Full lifecycle: dispute → KOL wins ---
+    // --- Full lifecycle: dispute → KOL wins (with fee) ---
 
     function test_fullLifecycle_disputeKolWins() public {
         _depositDeliverAndDispute(GIG_ID);
@@ -430,8 +508,8 @@ contract ShillClawdEscrowTest is Test {
         vm.prank(admin);
         escrow.resolveDispute(GIG_ID, true);
 
-        assertEq(usdc.balanceOf(kol), AMOUNT);
-        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(usdc.balanceOf(kol), KOL_AMOUNT);
+        assertEq(usdc.balanceOf(address(escrow)), FEE);
     }
 
     // --- Full lifecycle: dispute → auto-resolve after 7 days ---
@@ -444,8 +522,8 @@ contract ShillClawdEscrowTest is Test {
         vm.prank(anyone);
         escrow.autoResolveDispute(GIG_ID);
 
-        assertEq(usdc.balanceOf(kol), AMOUNT);
-        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(usdc.balanceOf(kol), KOL_AMOUNT);
+        assertEq(usdc.balanceOf(address(escrow)), FEE);
     }
 
     // --- Multiple gigs ---
@@ -466,21 +544,21 @@ contract ShillClawdEscrowTest is Test {
 
         assertEq(usdc.balanceOf(address(escrow)), AMOUNT + 5_000_000);
 
-        // Release gig 1
+        // Release gig 1 (KOL gets 95%)
         vm.startPrank(admin);
         escrow.markDelivered(1);
         escrow.release(1);
         vm.stopPrank();
 
-        assertEq(usdc.balanceOf(kol), AMOUNT);
-        assertEq(usdc.balanceOf(address(escrow)), 5_000_000);
+        assertEq(usdc.balanceOf(kol), KOL_AMOUNT);
 
-        // Refund gig 2
+        // Refund gig 2 (full refund, no fee)
         vm.warp(block.timestamp + WORK_DEADLINE_OFFSET + 1);
         vm.prank(admin);
         escrow.refund(2);
 
-        assertEq(usdc.balanceOf(address(escrow)), 0);
+        // Only fee from gig 1 remains
+        assertEq(usdc.balanceOf(address(escrow)), FEE);
     }
 
     // --- Status cannot go backwards ---
