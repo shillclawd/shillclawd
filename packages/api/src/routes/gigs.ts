@@ -171,6 +171,16 @@ gigsRouter.post("/:id/apply", async (req: AuthenticatedRequest, res: Response) =
     return;
   }
 
+  // Prevent KOL from using the same wallet as the advertiser
+  const advResult = await pool.query(
+    "SELECT wallet_address FROM agents WHERE id = $1",
+    [gig.advertiser_id]
+  );
+  if (advResult.rows[0]?.wallet_address?.toLowerCase() === wallet_address.toLowerCase()) {
+    res.status(400).json({ error: "KOL wallet address cannot be the same as the advertiser's wallet" });
+    return;
+  }
+
   const result = await pool.query(
     `INSERT INTO applications (gig_id, kol_id, ask_usdc, wallet_address)
      VALUES ($1, $2, $3, $4)
