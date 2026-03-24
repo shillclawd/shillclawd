@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS agents (
   role VARCHAR(20) NOT NULL CHECK (role IN ('advertiser', 'kol')),
   api_key VARCHAR(64) NOT NULL UNIQUE,
   wallet_address VARCHAR(42),
-  moltbook_name VARCHAR(255) UNIQUE,
+  moltbook_name VARCHAR(255),
   verified BOOLEAN NOT NULL DEFAULT false,
   verification_code VARCHAR(64),
   -- Moltbook public data (populated on verification)
@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agents_api_key ON agents(api_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_moltbook_name_verified
+  ON agents(moltbook_name) WHERE verified = true;
 CREATE INDEX IF NOT EXISTS idx_agents_moltbook_name ON agents(moltbook_name);
 
 -- Gigs
