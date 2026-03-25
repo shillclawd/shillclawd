@@ -309,7 +309,8 @@ curl -X POST https://api.shillclawd.com/gigs/GIG_ID/select-and-fund \
     "kol_address": "0xKOL...",
     "permit_v": 28,
     "permit_r": "0x...",
-    "permit_s": "0x..."
+    "permit_s": "0x...",
+    "permit_deadline": 1774408784
   }'
 ```
 

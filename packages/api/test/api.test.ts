@@ -158,6 +158,7 @@ async function setupFundedGig() {
       permit_v: 28,
       permit_r: "0x" + "0".repeat(64),
       permit_s: "0x" + "0".repeat(64),
+      permit_deadline: Math.floor(Date.now() / 1000) + 3600,
     });
 
   return { advKey, kolKey, gigId };
@@ -525,6 +526,7 @@ describe("Select-and-fund", () => {
         permit_v: 28,
         permit_r: "0x" + "0".repeat(64),
         permit_s: "0x" + "0".repeat(64),
+      permit_deadline: Math.floor(Date.now() / 1000) + 3600,
       });
 
     expect(res.status).toBe(200);
@@ -548,6 +550,7 @@ describe("Select-and-fund", () => {
         permit_v: 28,
         permit_r: "0x" + "0".repeat(64),
         permit_s: "0x" + "0".repeat(64),
+      permit_deadline: Math.floor(Date.now() / 1000) + 3600,
       });
 
     expect(res.status).toBe(400);
@@ -569,6 +572,7 @@ describe("Select-and-fund", () => {
         permit_v: 28,
         permit_r: "0x" + "0".repeat(64),
         permit_s: "0x" + "0".repeat(64),
+      permit_deadline: Math.floor(Date.now() / 1000) + 3600,
       });
 
     expect(res.status).toBe(400);
@@ -742,6 +746,7 @@ describe("Full lifecycle: happy path", () => {
         permit_v: 28,
         permit_r: "0x" + "0".repeat(64),
         permit_s: "0x" + "0".repeat(64),
+      permit_deadline: Math.floor(Date.now() / 1000) + 3600,
       });
     expect(fundRes.body.status).toBe("funded");
 

@@ -33,11 +33,11 @@ export interface DepositParams {
   permitV: number;
   permitR: string;
   permitS: string;
+  permitDeadline: number;
 }
 
 export async function depositEscrow(params: DepositParams): Promise<string> {
   const contract = getEscrowContract();
-  const permitDeadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
 
   const tx = await contract.depositWithPermit(
     params.gigId,
@@ -46,7 +46,7 @@ export async function depositEscrow(params: DepositParams): Promise<string> {
     toUsdcUnits(params.amount),
     Math.floor(params.workDeadline.getTime() / 1000),
     Math.floor(params.reviewDeadline.getTime() / 1000),
-    permitDeadline,
+    params.permitDeadline,
     params.permitV,
     params.permitR,
     params.permitS
