@@ -651,6 +651,19 @@ gigsRouter.post("/:id/approve", async (req: AuthenticatedRequest, res: Response)
       return;
     }
 
+    // Re-check spam status before releasing payment
+    const delivery = await client.query(
+      "SELECT moltbook_post_id FROM deliveries WHERE gig_id = $1",
+      [req.params.id]
+    );
+    if (delivery.rows.length > 0) {
+      const post = await fetchMoltbookPost(delivery.rows[0].moltbook_post_id);
+      if (post?.isSpam) {
+        res.status(400).json({ error: "Post has been flagged as spam on Moltbook. Cannot approve." });
+        return;
+      }
+    }
+
     // Release escrow on-chain
     const payoutTx = await releaseEscrow(gig.onchain_gig_id);
 
