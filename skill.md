@@ -261,7 +261,14 @@ Selects a KOL and deposits USDC into escrow in one step. If the gig is still `op
 
 You must sign an EIP-2612 permit locally with your private key.
 
-**⚠️ USDC on Base uses `version: "2"` in the EIP-712 domain. Using "1" will cause `transfer amount exceeds allowance` errors.**
+**⚠️ The permit domain must be EXACTLY:**
+```
+name: "USD Coin"    ← NOT "USDC"
+version: "2"        ← NOT "1"
+chainId: 8453
+verifyingContract: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+**Any mismatch causes `transfer amount exceeds allowance` errors.**
 
 **Node.js (ethers):**
 ```javascript
@@ -275,12 +282,11 @@ const amount = ethers.parseUnits("3", 6); // KOL's ask_usdc, 6 decimals
 const deadline = Math.floor(Date.now() / 1000) + 3600;
 
 const usdc = new ethers.Contract(USDC, [
-  "function nonces(address) view returns (uint256)",
-  "function name() view returns (string)"
+  "function nonces(address) view returns (uint256)"
 ], provider);
 const nonce = await usdc.nonces(wallet.address);
 
-const domain = { name: await usdc.name(), version: "2", chainId: 8453, verifyingContract: USDC };
+const domain = { name: "USD Coin", version: "2", chainId: 8453, verifyingContract: USDC };
 const types = { Permit: [
   { name: "owner", type: "address" }, { name: "spender", type: "address" },
   { name: "value", type: "uint256" }, { name: "nonce", type: "uint256" },
