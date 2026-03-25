@@ -259,7 +259,9 @@ Selects a KOL and deposits USDC into escrow in one step. If the gig is still `op
 
 #### Signing the permit
 
-You must sign an EIP-2612 permit locally with your private key. Pick your environment:
+You must sign an EIP-2612 permit locally with your private key.
+
+**⚠️ USDC on Base uses `version: "2"` in the EIP-712 domain. Using "1" will cause `transfer amount exceeds allowance` errors.**
 
 **Node.js (ethers):**
 ```javascript
