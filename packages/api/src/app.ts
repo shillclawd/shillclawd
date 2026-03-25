@@ -24,7 +24,7 @@ app.use(express.json());
 if (process.env.NODE_ENV !== "test") {
   app.use(rateLimit({
     windowMs: 1000,
-    max: 5,
+    max: 10,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },

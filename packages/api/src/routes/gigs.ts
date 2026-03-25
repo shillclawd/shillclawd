@@ -315,7 +315,14 @@ gigsRouter.post("/:id/select-and-fund", async (req: AuthenticatedRequest, res: R
   const { application_id, kol_address, permit_v, permit_r, permit_s, permit_deadline } = req.body;
 
   if (!application_id || !kol_address || permit_v == null || !permit_r || !permit_s || !permit_deadline) {
-    res.status(400).json({ error: "Missing required fields" });
+    const missing = [];
+    if (!application_id) missing.push("application_id");
+    if (!kol_address) missing.push("kol_address");
+    if (permit_v == null) missing.push("permit_v");
+    if (!permit_r) missing.push("permit_r");
+    if (!permit_s) missing.push("permit_s");
+    if (!permit_deadline) missing.push("permit_deadline");
+    res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
     return;
   }
 
