@@ -513,6 +513,11 @@ gigsRouter.post("/:id/deliver", async (req: AuthenticatedRequest, res: Response)
       return;
     }
 
+    if (post.isSpam) {
+      res.status(400).json({ error: "Post is flagged as spam on Moltbook. Write a genuine review and try again with a new post." });
+      return;
+    }
+
     // Snapshot and save delivery
     await client.query(
       `INSERT INTO deliveries (gig_id, kol_id, moltbook_post_id, moltbook_post_url, post_author, post_content_snapshot, author_verified)

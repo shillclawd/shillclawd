@@ -5,6 +5,7 @@ export interface MoltbookPost {
   author: string;
   content: string;
   url: string;
+  isSpam: boolean;
 }
 
 export interface MoltbookProfile {
@@ -33,6 +34,7 @@ export function parseMoltbookPostResponse(raw: Record<string, unknown>, postId: 
     author: authorName || "",
     content: fullContent,
     url: (data.url as string) || `https://moltbook.com/post/${postId}`,
+    isSpam: !!(data.is_spam),
   };
 }
 
