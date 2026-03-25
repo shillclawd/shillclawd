@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
-import { ethers } from "ethers";
+import { verifyMessage } from "viem";
 import { pool } from "../db/pool.js";
 import { fetchMoltbookPost, fetchMoltbookProfile } from "../services/moltbook.js";
 
@@ -206,8 +206,12 @@ agentsRouter.post("/agents/recover", async (req: Request, res: Response) => {
     // Verify signature of message "ShillClawd recover <wallet_address>"
     const message = `ShillClawd recover ${wallet_address}`;
     try {
-      const recovered = ethers.verifyMessage(message, signature);
-      if (recovered.toLowerCase() !== wallet_address.toLowerCase()) {
+      const valid = await verifyMessage({
+        address: wallet_address as `0x${string}`,
+        message,
+        signature: signature as `0x${string}`,
+      });
+      if (!valid) {
         res.status(400).json({ error: "Signature does not match wallet_address" });
         return;
       }

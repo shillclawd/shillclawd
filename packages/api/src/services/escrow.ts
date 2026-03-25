@@ -1,26 +1,82 @@
-import { ethers } from "ethers";
+import { createPublicClient, createWalletClient, http, parseUnits, getContract } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { base } from "viem/chains";
 
 const ESCROW_ABI = [
-  "function depositWithPermit(uint256 gigId, address advertiser, address kolAddress, uint256 amount, uint256 workDeadline, uint256 reviewDeadline, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s) external",
-  "function markDelivered(uint256 gigId) external",
-  "function release(uint256 gigId) external",
-  "function refund(uint256 gigId) external",
-  "function markDisputed(uint256 gigId) external",
-  "function resolveDispute(uint256 gigId, bool kolWins) external",
-  "function autoRelease(uint256 gigId) external",
-  "function autoRefund(uint256 gigId) external",
-  "function autoResolveDispute(uint256 gigId) external",
-];
+  {
+    name: "depositWithPermit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "gigId", type: "uint256" },
+      { name: "advertiser", type: "address" },
+      { name: "kolAddress", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "workDeadline", type: "uint256" },
+      { name: "reviewDeadline", type: "uint256" },
+      { name: "permitDeadline", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "markDelivered",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "gigId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "release",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "gigId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "refund",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "gigId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "markDisputed",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "gigId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "resolveDispute",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "gigId", type: "uint256" },
+      { name: "kolWins", type: "bool" },
+    ],
+    outputs: [],
+  },
+] as const;
 
-function getEscrowContract(): ethers.Contract {
-  const provider = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL);
-  const wallet = new ethers.Wallet(process.env.SETTLE_WALLET_PRIVATE_KEY!, provider);
-  return new ethers.Contract(process.env.ESCROW_CONTRACT_ADDRESS!, ESCROW_ABI, wallet);
+function getClients() {
+  const account = privateKeyToAccount(process.env.SETTLE_WALLET_PRIVATE_KEY! as `0x${string}`);
+  const transport = http(process.env.BASE_RPC_URL);
+
+  const publicClient = createPublicClient({ chain: base, transport });
+  const walletClient = createWalletClient({ account, chain: base, transport });
+
+  return { publicClient, walletClient, account };
 }
 
-// USDC has 6 decimals
+function getEscrowAddress(): `0x${string}` {
+  return process.env.ESCROW_CONTRACT_ADDRESS! as `0x${string}`;
+}
+
 function toUsdcUnits(amount: number): bigint {
-  return ethers.parseUnits(amount.toString(), 6);
+  return parseUnits(amount.toString(), 6);
 }
 
 export interface DepositParams {
@@ -37,56 +93,86 @@ export interface DepositParams {
 }
 
 export async function depositEscrow(params: DepositParams): Promise<string> {
-  const contract = getEscrowContract();
+  const { publicClient, walletClient, account } = getClients();
 
-  const tx = await contract.depositWithPermit(
-    params.gigId,
-    params.advertiserAddress,
-    params.kolAddress,
-    toUsdcUnits(params.amount),
-    Math.floor(params.workDeadline.getTime() / 1000),
-    Math.floor(params.reviewDeadline.getTime() / 1000),
-    params.permitDeadline,
-    params.permitV,
-    params.permitR,
-    params.permitS
-  );
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "depositWithPermit",
+    args: [
+      BigInt(params.gigId),
+      params.advertiserAddress as `0x${string}`,
+      params.kolAddress as `0x${string}`,
+      toUsdcUnits(params.amount),
+      BigInt(Math.floor(params.workDeadline.getTime() / 1000)),
+      BigInt(Math.floor(params.reviewDeadline.getTime() / 1000)),
+      BigInt(params.permitDeadline),
+      params.permitV,
+      params.permitR as `0x${string}`,
+      params.permitS as `0x${string}`,
+    ],
+  });
 
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
 
 export async function markDeliveredOnChain(onchainGigId: number): Promise<string> {
-  const contract = getEscrowContract();
-  const tx = await contract.markDelivered(onchainGigId);
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "markDelivered",
+    args: [BigInt(onchainGigId)],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
 
 export async function releaseEscrow(onchainGigId: number): Promise<string> {
-  const contract = getEscrowContract();
-  const tx = await contract.release(onchainGigId);
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "release",
+    args: [BigInt(onchainGigId)],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
 
 export async function refundEscrow(onchainGigId: number): Promise<string> {
-  const contract = getEscrowContract();
-  const tx = await contract.refund(onchainGigId);
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "refund",
+    args: [BigInt(onchainGigId)],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
 
 export async function markDisputedOnChain(onchainGigId: number): Promise<string> {
-  const contract = getEscrowContract();
-  const tx = await contract.markDisputed(onchainGigId);
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "markDisputed",
+    args: [BigInt(onchainGigId)],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
 
 export async function resolveDisputeOnChain(onchainGigId: number, kolWins: boolean): Promise<string> {
-  const contract = getEscrowContract();
-  const tx = await contract.resolveDispute(onchainGigId, kolWins);
-  const receipt = await tx.wait();
-  return receipt.hash;
+  const { publicClient, walletClient } = getClients();
+  const hash = await walletClient.writeContract({
+    address: getEscrowAddress(),
+    abi: ESCROW_ABI,
+    functionName: "resolveDispute",
+    args: [BigInt(onchainGigId), kolWins],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return receipt.transactionHash;
 }
